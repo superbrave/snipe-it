@@ -1,0 +1,140 @@
+apiVersion: "apps/v1"
+kind: "Deployment"
+metadata:
+  name: "application"
+  labels:
+    application.ehvg.dev/name: "snipe-it"
+    application.ehvg.dev/version: {{ .Values.application.version }}
+    application.ehvg.dev/environment: "production"
+spec:
+  replicas: 2
+  strategy:
+    type: "RollingUpdate"
+    rollingUpdate:
+      maxSurge: 2
+      maxUnavailable: "50%"
+  selector:
+    matchLabels:
+      application.ehvg.dev/name: "snipe-it"
+      application.ehvg.dev/environment: "production"
+  template:
+    metadata:
+      annotations:
+        checksum/aws-ca-certificates: "{{ include (print $.Template.BasePath "/ConfigMap/AWSCACertificates.yaml") . | sha256sum }}"
+        checksum/env-vars: "{{ include (print $.Template.BasePath "/ConfigMap/EnvVars.yaml") . | sha256sum }}"
+        checksum/nginx: "{{ include (print $.Template.BasePath "/ConfigMap/Nginx.yaml") . | sha256sum }}"
+        checksum/php: "{{ include (print $.Template.BasePath "/ConfigMap/Php.yaml") . | sha256sum }}"
+        timestamp: "{{ now | date "2006-01-02T15:04:05Z07:00" }}"
+      labels:
+        application.ehvg.dev/name: "snipe-it"
+        application.ehvg.dev/environment: "production"
+    spec:
+      serviceAccountName: "snipe-it"
+      imagePullSecrets:
+        - name: "ghcr"
+      initContainers:
+        - name: "snipe-it-assets"
+          image: "ghcr.io/superbrave/snipe-it:{{ .Values.application.version }}"
+          imagePullPolicy: "Always"
+          command: ["sh", "-c", "cp -r /var/www/public/* /snipe-it-assets"]
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+          volumeMounts:
+            - mountPath: "/snipe-it-assets"
+              name: "snipe-it-assets"
+          resources:
+            limits:
+              cpu: "50m"
+              memory: "64Mi"
+            requests:
+              cpu: "50m"
+              memory: "64Mi"
+        - name: "run-migrations"
+          image: "ghcr.io/superbrave/snipe-it:{{ .Values.application.version }}"
+          imagePullPolicy: "Always"
+          command: ["php", "artisan", "migrate", "-n", "--force"]
+          envFrom:
+            - configMapRef:
+                name: "env-vars"
+            - secretRef:
+                name: "snipe-it"
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "256Mi"
+      containers:
+        - name: "nginx"
+          image: "openresty/openresty:1.27.1.2-5-alpine-slim"
+          imagePullPolicy: "IfNotPresent"
+          ports:
+            - name: "http"
+              containerPort: 80
+              protocol: "TCP"
+          resources:
+            limits:
+              cpu: "100m"
+              memory: "32Mi"
+            requests:
+              cpu: "100m"
+              memory: "32Mi"
+          volumeMounts:
+            - name: "nginx-config"
+              mountPath: "/etc/nginx/extras/security.conf"
+              subPath: "security.conf"
+            - name: "nginx-config"
+              mountPath: "/etc/nginx/extras/performance.conf"
+              subPath: "performance.conf"
+            - name: "nginx-config"
+              mountPath: "/etc/nginx/conf.d/default.conf"
+              subPath: "default.conf"
+            - name: "nginx-config"
+              mountPath: "/usr/local/openresty/nginx/conf/nginx.conf"
+              subPath: "nginx.conf"
+            - name: "snipe-it-assets"
+              mountPath: "/var/www/public"
+        - name: "application"
+          image: "ghcr.io/superbrave/snipe-it:{{ .Values.application.version }}"
+          imagePullPolicy: "Always"
+          envFrom:
+            - configMapRef:
+                name: "env-vars"
+            - secretRef:
+                name: "snipe-it"
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "256Mi"
+          volumeMounts:
+            - name: "aws-ca-certificates"
+              subPath: "global-bundle.pem"
+              mountPath: "/etc/ssl/certs/aws-global-bundle.pem"
+            - name: "oauth"
+              mountPath: "/var/www/storage/oauth-private.key"
+              subPath: "oauth-private.key"
+              readOnly: true
+            - name: "oauth"
+              mountPath: "/var/www/storage/oauth-public.key"
+              subPath: "oauth-private.key"
+              readOnly: true
+      volumes:
+        - name: "aws-ca-certificates"
+          configMap:
+            name: "aws-ca-certificates"
+        - name: "oauth"
+          secret:
+            secretName: "oauth"
+        - name: "nginx-config"
+          configMap:
+            name: "nginx"
+        - name: "php-ini"
+          configMap:
+            name: "php"
+        - name: "snipe-it-assets"
+          emptyDir: {}

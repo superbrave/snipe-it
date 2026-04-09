@@ -1,0 +1,10 @@
+apiVersion: "v1"
+kind: "ServiceAccount"
+metadata:
+  name: "snipe-it"
+#  annotations:
+#    eks.amazonaws.com/role-arn: "arn:aws:iam::602052525309:role/EHVGSnipeITServiceAccount"
+  labels:
+    application.ehvg.dev/name: "snipe-it"
+    application.ehvg.dev/deployment: "application"
+    application.ehvg.dev/environment: "production"

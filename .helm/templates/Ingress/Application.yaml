@@ -1,0 +1,27 @@
+apiVersion: "networking.k8s.io/v1"
+kind: "Ingress"
+metadata:
+  name: "application"
+  labels:
+    application.ehvg.dev/name: "snipe-it"
+    application.ehvg.dev/environment: "production"
+  annotations:
+    external-dns.alpha.kubernetes.io/cloudflare-proxied: "true"
+    alb.ingress.kubernetes.io/target-type: "ip"
+    alb.ingress.kubernetes.io/scheme: "internet-facing"
+    alb.ingress.kubernetes.io/healthcheck-path: "/healthz"
+    alb.ingress.kubernetes.io/security-groups: "sg-08625933c4e35656a"
+    alb.ingress.kubernetes.io/certificate-arn: "arn:aws:acm:eu-central-1:602052525309:certificate/969ccf9c-357e-4286-a944-f1f4eec7a75b"
+spec:
+  ingressClassName: "alb"
+  rules:
+    - host: "assets.ehealthsystems.nl"
+      http:
+        paths:
+          - path: "/"
+            pathType: "Prefix"
+            backend:
+              service:
+                name: "application"
+                port:
+                  number: 80

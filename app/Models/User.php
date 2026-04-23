@@ -24,6 +24,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\Access\Authorizable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Str;
 use Laravel\Passport\HasApiTokens;
@@ -207,11 +208,55 @@ class User extends SnipeModel implements AuthenticatableContract, AuthorizableCo
     {
         static::forceDeleted(function (User $user) {
             CheckoutRequest::where(['user_id' => $user->id])->forceDelete();
+            $user->purgeAssociatedPassportTokens();
         });
 
         static::softDeleted(function (User $user) {
             CheckoutRequest::where(['user_id' => $user->id])->delete();
+            $user->revokeAssociatedPassportTokens();
         });
+    }
+
+    /**
+     * Revoke all Passport access/refresh tokens associated with this user.
+     */
+    private function revokeAssociatedPassportTokens(): void
+    {
+        $accessTokenIds = DB::table('oauth_access_tokens')
+            ->where('user_id', $this->id)
+            ->pluck('id');
+
+        if ($accessTokenIds->isEmpty()) {
+            return;
+        }
+
+        DB::table('oauth_access_tokens')
+            ->whereIn('id', $accessTokenIds)
+            ->update(['revoked' => true]);
+
+        DB::table('oauth_refresh_tokens')
+            ->whereIn('access_token_id', $accessTokenIds)
+            ->update(['revoked' => true]);
+    }
+
+    /**
+     * Hard-delete all Passport access/refresh tokens associated with this user.
+     */
+    private function purgeAssociatedPassportTokens(): void
+    {
+        $accessTokenIds = DB::table('oauth_access_tokens')
+            ->where('user_id', $this->id)
+            ->pluck('id');
+
+        if ($accessTokenIds->isNotEmpty()) {
+            DB::table('oauth_refresh_tokens')
+                ->whereIn('access_token_id', $accessTokenIds)
+                ->delete();
+        }
+
+        DB::table('oauth_access_tokens')
+            ->where('user_id', $this->id)
+            ->delete();
     }
 
     /**
@@ -257,6 +302,120 @@ class User extends SnipeModel implements AuthenticatableContract, AuthorizableCo
         }
 
         return false;
+    }
+
+    /**
+     * Build a list of effective user permissions grouped by permission section.
+     *
+     * Includes explicit denials from user or group permissions so the UI can
+     * show both allowed and denied entries.
+     *
+     * This is kind of duplicative from the other permission-checking methods, but it allows us to build a
+     * list of permissions for display purposes without having to do a lot of super-confusing and
+     * redundant checks in the UI layer.
+     *
+     * This will likely go away once we refactor the permissions to be in a database table instead of the
+     * stupiud config file.
+     */
+    public function getEffectivePermissionsBySection(): array
+    {
+        $displayablePermissions = collect(config('permissions'))
+            ->map(static fn (array $permissions): array => array_values(array_filter($permissions, static fn (array $permission): bool => ($permission['display'] ?? false) === true)))
+            ->all();
+
+        $configuredPermissions = collect($displayablePermissions)
+            ->flatMap(static function (array $permissions, string $section) {
+                return collect($permissions)->map(static function (array $permission) use ($section): array {
+                    return [
+                        'section' => $section,
+                        'permission' => $permission['permission'],
+                    ];
+                });
+            })
+            ->unique('permission')
+            ->values();
+
+        $directPermissions = $this->decodePermissions();
+        $directPermissions = is_array($directPermissions) ? $directPermissions : [];
+
+        $groupGrantsByPermission = [];
+        $groupDenialsByPermission = [];
+        foreach ($this->groups as $group) {
+            $groupPermissions = $group->decodePermissions();
+            if (! is_array($groupPermissions)) {
+                continue;
+            }
+
+            foreach ($groupPermissions as $permissionKey => $permissionValue) {
+                if ((int) $permissionValue === 1) {
+                    $groupGrantsByPermission[$permissionKey][] = $group->name;
+                } elseif ((int) $permissionValue === -1) {
+                    $groupDenialsByPermission[$permissionKey][] = $group->name;
+                }
+            }
+        }
+
+        $effectiveBySection = [];
+        foreach ($configuredPermissions as $permissionConfig) {
+            $permissionKey = $permissionConfig['permission'];
+            $directPermissionValue = (int) ($directPermissions[$permissionKey] ?? 0);
+            $isAllowed = $this->hasAccess($permissionKey);
+            $isDenied = ($directPermissionValue === -1) || ((count($groupDenialsByPermission[$permissionKey] ?? []) > 0) && ! $isAllowed);
+
+            if (! $isAllowed && ! $isDenied) {
+                continue;
+            }
+
+            $status = $isDenied ? 'denied' : 'allowed';
+            $source = 'group';
+            $sourceGroups = $isDenied
+                ? ($groupDenialsByPermission[$permissionKey] ?? [])
+                : ($groupGrantsByPermission[$permissionKey] ?? []);
+
+            if ($isDenied && $directPermissionValue === -1) {
+                $source = 'individual';
+                $sourceGroups = [];
+            } elseif ($this->isSuperUser()) {
+                $source = 'superuser';
+                $sourceGroups = [];
+            } elseif (! $isDenied && $directPermissionValue === 1) {
+                $source = 'individual';
+                $sourceGroups = [];
+            }
+
+            $effectiveBySection[$permissionConfig['section']][] = [
+                'permission' => $permissionKey,
+                'status' => $status,
+                'source' => $source,
+                'groups' => array_values(array_unique($sourceGroups)),
+                'source_label' => $this->buildPermissionSourceLabel(
+                    status: $status,
+                    source: $source,
+                    sourceGroups: $sourceGroups
+                ),
+            ];
+        }
+
+        return $effectiveBySection;
+    }
+
+    /**
+     * Build a compact source label for a permission entry.
+     */
+    private function buildPermissionSourceLabel(string $status, string $source, array $sourceGroups = []): string
+    {
+        $statusLabel = $status === 'denied' ? 'Denied' : 'Allowed';
+        $sourceLabel = match ($source) {
+            'individual' => 'Individual',
+            'superuser' => 'Superuser',
+            default => 'Group',
+        };
+
+        if ($sourceGroups === []) {
+            return $statusLabel.' ('.$sourceLabel.')';
+        }
+
+        return $statusLabel.' ('.$sourceLabel.'): '.implode(', ', array_values(array_unique($sourceGroups)));
     }
 
     /**
@@ -695,6 +854,22 @@ class User extends SnipeModel implements AuthenticatableContract, AuthorizableCo
             ->where('target_type', self::class)
             ->where('action_type', '=', 'accepted')
             ->orderBy('created_at', 'desc');
+    }
+
+    /**
+     * Get all assigned items that still have a pending acceptance for this user.
+     */
+    public function getAssignedItemsWithPendingAcceptance(): Collection
+    {
+        return CheckoutAcceptance::query()
+            ->forUser($this)
+            ->pending()
+            ->with('checkoutable')
+            ->get()
+            ->map(fn (CheckoutAcceptance $acceptance) => $acceptance->checkoutable)
+            ->filter()
+            ->unique(fn ($item) => $item::class.':'.$item->getKey())
+            ->values();
     }
 
     /**

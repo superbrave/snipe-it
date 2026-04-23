@@ -32,6 +32,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Mail\Mailable;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use League\Csv\EscapeFormula;
@@ -917,7 +918,7 @@ class ReportsController extends Controller
 
                     if ($request->filled('user_company')) {
                         if ($asset->checkedOutToUser()) {
-                            $row[] = ($asset->assignedto->company) ? $asset->assignedto->company->display_name : '';
+                            $row[] = ($asset->assignedto?->company) ? $asset->assignedto->company->display_name : '';
                         } else {
                             $row[] = ''; // Empty string if unassigned
                         }
@@ -1070,7 +1071,13 @@ class ReportsController extends Controller
                     foreach ($customfields as $customfield) {
                         $column_name = $customfield->db_column_name();
                         if ($request->filled($customfield->db_column_name())) {
-                            $row[] = $asset->$column_name;
+                            $value = $asset->$column_name;
+
+                            if (($customfield->field_encrypted == '1') && Gate::allows('assets.view.encrypted_custom_fields')) {
+                                $value = Helper::gracefulDecrypt($customfield, $value);
+                            }
+
+                            $row[] = $value;
                         }
                     }
 

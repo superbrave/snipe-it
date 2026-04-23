@@ -107,7 +107,7 @@ trait Loggable
                 break;
         }
 
-        return $history;
+        return $history->forApiHistory();
 
     }
 
@@ -180,7 +180,7 @@ trait Loggable
 
         $changed = [];
         $array_to_flip = array_keys($fields_array);
-        $array_to_flip = array_merge($array_to_flip, ['name', 'status_id', 'location_id', 'expected_checkin']);
+        $array_to_flip = array_merge($array_to_flip, ['name', 'status_id', 'location_id', 'expected_checkin', 'requestable']);
         $originalValues = array_intersect_key($originalValues, array_flip($array_to_flip));
 
         foreach ($originalValues as $key => $value) {
@@ -279,7 +279,7 @@ trait Loggable
         $changed = [];
 
         $array_to_flip = array_keys($fields_array);
-        $array_to_flip = array_merge($array_to_flip, ['name', 'status_id', 'location_id', 'expected_checkin']);
+        $array_to_flip = array_merge($array_to_flip, ['name', 'status_id', 'location_id', 'expected_checkin', 'requestable']);
 
         $originalValues = array_intersect_key($originalValues, array_flip($array_to_flip));
 
@@ -299,6 +299,32 @@ trait Loggable
         }
 
         $log->logaction('checkin from');
+
+        return $log;
+    }
+
+    /**
+     * Logs a force checkin action for orphaned assignments.
+     *
+     * Force checkin only records an explicit action log entry and intentionally
+     * skips checkin counters and changed-field metadata.
+     *
+     * @return Actionlog
+     */
+    public function logForceCheckin($note = null)
+    {
+        $log = new Actionlog;
+
+        $log = $this->determineLogItemType($log);
+        $log->location_id = null;
+        $log->note = $note;
+        $log->action_date = date('Y-m-d H:i:s');
+
+        if (auth()->user()) {
+            $log->created_by = auth()->id();
+        }
+
+        $log->logaction('force checkin');
 
         return $log;
     }

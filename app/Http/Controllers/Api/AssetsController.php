@@ -39,6 +39,7 @@ use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 /**
  * This class controls all actions related to assets for
@@ -219,10 +220,18 @@ class AssetsController extends Controller
 
         // This is used by the sidenav, mostly
 
-        // We switched from using query scopes here because of a Laravel bug
-        // related to fulltext searches on complex queries.
-        // I am sad. :(
-        switch ($request->input('status_type')) {
+        // This bit here accounts for folks actually using the formerly-known-as status like we previously used in the sidenav
+        // to return a list of all assets with the status *type* of Deployed, etc. The inuput field used to be "status" (which was consistent
+        // with the relation rename, but it broke the sidebar. This should handle both use cases in the event that someone didn't update
+        // their API integration code
+        $status_type_key = null;
+        if ($request->filled('status_type')) {
+            $status_type_key = $request->input('status_type');
+        } elseif ($request->filled('status')) {
+            $status_type_key = $request->input('status');
+        }
+
+        switch ($status_type_key) {
             case 'Deleted':
                 $assets->onlyTrashed();
                 break;
@@ -953,6 +962,11 @@ class AssetsController extends Controller
             $asset->status_id = $request->input('status_id');
         }
 
+        // Preserve existing requestable state unless API caller explicitly includes the field.
+        if ($request->has('requestable')) {
+            $asset->requestable = $request->boolean('requestable');
+        }
+
         if (! isset($target)) {
             return response()->json(Helper::formatStandardApiResponse('error', $error_payload, 'Checkout target for asset '.e($asset->asset_tag).' is invalid - '.$error_payload['target_type'].' does not exist.'));
         }
@@ -1109,11 +1123,23 @@ class AssetsController extends Controller
             $dt = Carbon::now()->addMonths($settings->audit_interval)->toDateString();
         }
 
-        // Allow the asset tag to be passed in the payload (legacy method)
-        if ($request->filled('asset_tag')) {
+        $audit_by_field = $request->input('audit_by_field', 'asset_tag');
+        $audit_key = $request->input('audit_key', null);
+
+        // If they have selected to scan by serial, use that
+        if (($settings->unique_serial == '1') && ($audit_by_field == 'serial') && ($audit_key)) {
+            $asset = Asset::where('serial', '=', trim($audit_key))->first();
+
+            // If they have selected by asset tag, use that
+        } elseif (($audit_by_field == 'asset_tag') && ($audit_key)) {
+            $asset = Asset::where('asset_tag', '=', trim($audit_key))->first();
+
+            // Allow the asset tag to be passed in the payload (legacy method)
+        } elseif ($request->filled('asset_tag')) {
             $asset = Asset::where('asset_tag', '=', $request->input('asset_tag'))->first();
         }
 
+        // If none of the above were selected, fall back to the route-model-binding
         if ($asset) {
 
             $originalValues = $asset->getRawOriginal();
@@ -1135,7 +1161,9 @@ class AssetsController extends Controller
             // Set up the payload for re-display in the API response
             $payload = [
                 'id' => $asset->id,
-                'asset_tag' => $asset->asset_tag,
+                'asset_tag' => e($asset->asset_tag),
+                'audit_by_field' => e(Str::headline($audit_by_field)),
+                'audit_key' => e($audit_key),
                 'note' => e($request->input('note')),
                 'status_label' => e($asset->status?->display_name),
                 'status_type' => $asset->status?->getStatuslabelType(),
@@ -1210,8 +1238,13 @@ class AssetsController extends Controller
 
         }
 
+        $fail_payload = [
+            'audit_by_field' => e(Str::headline($audit_by_field)),
+            'audit_key' => e($audit_key),
+        ];
+
         // No matching asset for the asset tag that was passed.
-        return response()->json(Helper::formatStandardApiResponse('error', null, trans('admin/hardware/message.does_not_exist')), 200);
+        return response()->json(Helper::formatStandardApiResponse('error', $fail_payload, trans('admin/hardware/message.does_not_exist')), 200);
 
     }
 
@@ -1460,11 +1493,11 @@ class AssetsController extends Controller
     public function history(Request $request, Asset $asset): JsonResponse|array
     {
         $this->authorize('history', $asset);
-        $history = $asset->getHistory($request);
-        $total = $asset->getHistory($request)->count();
+        $historyQuery = $asset->getHistory($request);
+        $total = (clone $historyQuery)->count();
         $offset = ($request->input('offset') > $total) ? $total : app('api_offset_value');
         $limit = app('api_limit_value');
-        $history = $history->skip($offset)->take($limit)->get();
+        $history = (clone $historyQuery)->skip($offset)->take($limit)->get();
 
         return response()->json((new ActionlogsTransformer)->transformActionlogs($history, $total), 200, ['Content-Type' => 'application/json;charset=utf8'], JSON_UNESCAPED_UNICODE);
     }

@@ -54,7 +54,7 @@ return [
     'avatar_upload' => 'Upload Avatar',
     'back' => 'Back',
     'bad_data' => 'Nothing found. Maybe bad data?',
-    'bulkaudit' => 'Bulk Audit',
+    'bulkaudit' => 'Scanner Bulk Audit',
     'bulkaudit_status' => 'Audit Status',
     'bulk_checkout' => 'Bulk Checkout',
     'bulk_edit' => 'Bulk Edit',
@@ -122,7 +122,7 @@ return [
     'debug_warning_text' => 'This application is running in production mode with debugging enabled. This can expose sensitive data if your application is accessible to the outside world. Disable debug mode by setting the <code>APP_DEBUG</code> value in your <code>.env</code> file to <code>false</code>.',
     'delete' => 'Delete',
     'delete_confirm' => 'Are you sure you wish to delete :item?',
-    'delete_confirm_no_undo' => 'Are you sure, you wish to delete :item? This cannot be undone.',
+    'delete_confirm_no_undo' => 'Are you sure you wish to delete :item? This cannot be undone.',
     'deleted' => 'Deleted',
     'delete_seats' => 'Deleted Seats',
     'deletion_failed' => 'Deletion failed',
@@ -167,7 +167,7 @@ return [
     'image_upload' => 'Upload Image',
     'filetypes_accepted_help' => 'Accepted filetype is :types. The maximum size allowed is :size.|Accepted filetypes are :types. The maximum upload size allowed is :size.',
     'filetypes_size_help' => 'The maximum upload size allowed is :size.',
-    'image_filetypes_help' => 'Accepted Filetypes are jpg, webp, png, gif, svg, and avif. The maximum upload size allowed is :size.',
+    'image_filetypes_help' => 'Accepted filetypes are jpg, webp, png, gif, svg, and avif. The maximum upload size allowed is :size.',
     'unaccepted_image_type' => 'This image file was not readable. Accepted filetypes are jpg, webp, png, gif, and svg. The mimetype of this file is: :mimetype.',
     'import' => 'Import',
     'documentation' => 'Open documentation in a new link',
@@ -564,6 +564,9 @@ return [
     'assigned_assets_removed' => 'The following were removed from the selected assets because they are already checked out',
     'upload_files' => 'Upload Files',
     'uploaded_files' => 'Uploaded Files',
+    'sign_in_place' => 'Sign/Accept in place',
+    'sign_in_place_help' => 'Check this box if you have the user present and wish for them to accept the item and sign/accept the EULA (when applicable) right now.',
+    'unauthorized' => 'Unauthorized or unauthenticated.',
     'importer' => [
         'checked_out_to_fullname' => 'Checked Out to: Full Name',
         'checked_out_to_first_name' => 'Checked Out to: First Name',
@@ -597,6 +600,9 @@ return [
     'status_compatibility' => 'If assets are already assigned, they cannot be changed to a non-deployable status type and this value change will be skipped.',
     'rtd_location_help' => 'This is the location of the asset when it is not checked out',
     'item_not_found' => ':item_type ID :id does not exist or has been deleted',
+    'item_target_not_found_hard' => ':item_type ID :id does not exist or has been hard-deleted. Would you like to force a checkin?',
+    'force_checkin' => 'Force Checkin',
+    'item_not_found_short' => ':item_type ID :id does not exist',
     'action_permission_denied' => 'You do not have permission to :action :item_type ID :id',
     'action_permission_generic' => 'You do not have permission to :action this :item_type',
     'edit' => 'edit',
@@ -667,6 +673,9 @@ return [
     'child_locations' => 'Child Locations',
     'append' => 'Append',
     'optional' => 'OPTIONAL',
+    'audit_by_field' => 'Audit by Field',
+    'audit_by_field_help' => 'Auditing by scanning serial numbers is only an available option if serial numbers are required to be unique in the Admin Settings.',
+    'audit_key' => 'Asset',
 
     // Add form placeholders here
     'placeholders' => [
@@ -695,26 +704,6 @@ return [
     'breadcrumb_button_actions' => [
         'checkout_item' => 'Checkout :name',
         'checkin_item' => 'Checkin :name',
-    ],
-
-    'skins' => [
-        'site_default' => 'Site Default',
-        'default_blue' => 'Default Blue',
-        'blue_dark' => 'Blue (Dark Mode)',
-        'green' => 'Green',
-        'green_dark' => 'Green (Dark Mode)',
-        'red' => 'Red',
-        'red_dark' => 'Red (Dark Mode)',
-        'orange' => 'Orange',
-        'orange_dark' => 'Orange (Dark Mode)',
-        'black' => 'Black',
-        'black_dark' => 'Black (Dark Mode)',
-        'purple' => 'Purple',
-        'purple_dark' => 'Purple (Dark Mode)',
-        'yellow' => 'Yellow',
-        'yellow_dark' => 'Yellow (Dark Mode)',
-        'high_contrast' => 'High Contrast',
-
     ],
 
     'select_all_none' => 'Select/Unselect All',
@@ -759,5 +748,8 @@ return [
     ],
 
     'months_plural' => '1 month|:count months',
+
+    'token_unrevoked' => 'API token reinstated',
+    'token_revoked' => 'API token revoked',
 
 ];

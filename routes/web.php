@@ -1,5 +1,6 @@
 <?php
 
+use App\Actions\Breadcrumbs\BuildAcceptanceBreadcrumbs;
 use App\Http\Controllers\Account;
 use App\Http\Controllers\ActionlogController;
 use App\Http\Controllers\Auth\ForgotPasswordController;
@@ -229,6 +230,18 @@ Route::group(['prefix' => 'admin', 'middleware' => ['auth', 'authorize:superuser
         ->breadcrumbs(fn (Trail $trail) => $trail->parent('settings.index')
             ->push(trans('admin/settings/general.oauth'), route('settings.oauth.index')));
 
+    Route::post('oauth/tokens/{token}/revoke', [SettingsController::class, 'revokePersonalAccessToken'])
+        ->name('settings.oauth.tokens.revoke');
+
+    Route::post('oauth/tokens/{token}/unrevoke', [SettingsController::class, 'unrevokePersonalAccessToken'])
+        ->name('settings.oauth.tokens.unrevoke');
+
+    Route::post('oauth/clients/{client}/revoke', [SettingsController::class, 'revokeOAuthClient'])
+        ->name('settings.oauth.clients.revoke');
+
+    Route::post('oauth/clients/{client}/unrevoke', [SettingsController::class, 'unrevokeOAuthClient'])
+        ->name('settings.oauth.clients.unrevoke');
+
     Route::get('google', [SettingsController::class, 'getGoogleLoginSettings'])
         ->name('settings.google.index')
         ->breadcrumbs(fn (Trail $trail) => $trail->parent('settings.index')
@@ -413,13 +426,11 @@ Route::group(['prefix' => 'account', 'middleware' => ['auth']], function () {
             ->push(trans('general.profile'), route('account'))
             ->push(trans('general.accept_items'), route('account.accept')));
 
-    Route::get('accept/{id}', [Account\AcceptanceController::class, 'create'])
+    Route::get('accept/{acceptance}', [Account\AcceptanceController::class, 'create'])
         ->name('account.accept.item')
-        ->breadcrumbs(fn (Trail $trail, $id) => $trail->parent('home')
-            ->push(trans('general.profile'), route('account'))
-            ->push(trans('general.accept_item'), route('account.accept.item', $id)));
+        ->breadcrumbs(fn (Trail $trail, mixed $acceptance) => BuildAcceptanceBreadcrumbs::forAcceptance($trail, $acceptance));
 
-    Route::post('accept/{id}', [Account\AcceptanceController::class, 'store'])
+    Route::post('accept/{acceptance}', [Account\AcceptanceController::class, 'store'])
         ->name('account.store-acceptance');
 
     Route::get(

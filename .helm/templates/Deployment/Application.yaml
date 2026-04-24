@@ -7,7 +7,7 @@ metadata:
     application.ehvg.dev/version: {{ .Values.application.version }}
     application.ehvg.dev/environment: "production"
 spec:
-  replicas: 2
+  replicas: 1
   strategy:
     type: "RollingUpdate"
     rollingUpdate:
@@ -37,9 +37,6 @@ spec:
           image: "ghcr.io/superbrave/snipe-it:{{ .Values.application.version }}"
           imagePullPolicy: "Always"
           command: ["sh", "-c", "cp -r /var/www/public/* /snipe-it-assets"]
-          securityContext:
-            runAsNonRoot: true
-            runAsUser: 1000
           volumeMounts:
             - mountPath: "/snipe-it-assets"
               name: "snipe-it-assets"
@@ -95,7 +92,22 @@ spec:
               mountPath: "/usr/local/openresty/nginx/conf/nginx.conf"
               subPath: "nginx.conf"
             - name: "snipe-it-assets"
-              mountPath: "/var/www/public"
+              mountPath: "/var/www/public/css"
+              subPath: "css"
+            - name: "snipe-it-assets"
+              mountPath: "/var/www/public/img"
+              subPath: "img"
+            - name: "snipe-it-assets"
+              mountPath: "/var/www/public/js"
+              subPath: "js"
+            - name: "snipe-it-assets"
+              mountPath: "/var/www/public/sounds"
+              subPath: "sounds"
+            - name: "snipe-it-assets"
+              mountPath: "/var/www/public/vendor"
+              subPath: "vendor"
+            - name: "public-uploads"
+              mountPath: "/var/www/public/uploads"
         - name: "application"
           image: "ghcr.io/superbrave/snipe-it:{{ .Values.application.version }}"
           imagePullPolicy: "Always"
@@ -123,6 +135,10 @@ spec:
               mountPath: "/var/www/storage/oauth-public.key"
               subPath: "oauth-private.key"
               readOnly: true
+            - name: "private-uploads"
+              mountPath: "/var/www/storage/private_uploads"
+            - name: "public-uploads"
+              mountPath: "/var/www/public/uploads"
       volumes:
         - name: "aws-ca-certificates"
           configMap:
@@ -138,3 +154,9 @@ spec:
             name: "php"
         - name: "snipe-it-assets"
           emptyDir: {}
+        - name: "private-uploads"
+          persistentVolumeClaim:
+            claimName: "private-uploads"
+        - name: "public-uploads"
+          persistentVolumeClaim:
+            claimName: "public-uploads"

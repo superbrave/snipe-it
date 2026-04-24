@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: "private-uploads"
+spec:
+  volumeName: "pvc-a0a4d9ca-174f-402b-acc8-3625baf8c804"
+  accessModes:
+    - "ReadWriteMany"
+  storageClassName: "snipe-it"
+  resources:
+    requests:
+      storage: "5Gi"

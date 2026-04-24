@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: "public-uploads"
+spec:
+  volumeName: "pvc-b43255de-81c8-4f11-86b8-2a19582ea456"
+  accessModes:
+    - "ReadWriteMany"
+  storageClassName: "snipe-it"
+  resources:
+    requests:
+      storage: "5Gi"
